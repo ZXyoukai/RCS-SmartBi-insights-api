@@ -1,0 +1,11 @@
+pandas
+fastapi
+uvicorn[standard]
+python-multipart
+google-generativeai
+python-dotenv
+sqlparse
+pydantic
+sqlalchemy
+pymysql
+psycopg2-binary

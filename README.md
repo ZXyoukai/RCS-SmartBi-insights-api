@@ -1,1 +1,0 @@
-# RCS-SmartBi-insights-api

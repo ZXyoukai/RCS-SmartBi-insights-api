@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""
+Script de teste para verificar se a formatação de quebras de linha está funcionando
+"""
+
+import asyncio
+import sys
+import os
+import logging
+from gemini_analyzer import GeminiAnalyzer
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+async def test_formatting():
+    """
+    Testa a funcionalidade de formatação de quebras de linha
+    """
+    try:
+        logger.info("🚀 Iniciando teste de formatação...")
+        
+        # Inicializar analisador
+        analyzer = GeminiAnalyzer()
+        
+        # Verificar se está configurado
+        if not analyzer.check_connection():
+            logger.error("❌ Erro na conexão com Gemini API")
+            return False
+        
+        # Executar teste de formatação
+        result = await analyzer.test_formatting()
+        
+        # Mostrar resultados
+        print("\n" + "="*80)
+        print("RESULTADOS DO TESTE DE FORMATAÇÃO")
+        print("="*80)
+        print(f"✅ Teste executado com sucesso: {result['test_success']}")
+        print(f"⏱️  Tempo de processamento: {result['processing_time']}s")
+        print(f"📊 Quebras de linha encontradas (\\n): {result['line_breaks_found']}")
+        print(f"📊 Tags <br> adicionadas: {result['br_tags_added']}")
+        print(f"🤖 Modelo usado: {result['model_used']}")
+        
+        print(f"\n📝 RESPOSTA ORIGINAL:")
+        print("-"*40)
+        print(repr(result['original_response'][:500]))  # Primeiros 500 caracteres
+        
+        print(f"\n🔄 RESPOSTA FORMATADA:")
+        print("-"*40)
+        print(result['formatted_response'][:500])  # Primeiros 500 caracteres
+        
+        # Verificar se a conversão funcionou
+        if result['line_breaks_found'] > 0 and result['br_tags_added'] >= result['line_breaks_found']:
+            print(f"\n✅ SUCESSO: {result['line_breaks_found']} quebras de linha foram convertidas para <br>")
+            return True
+        elif result['line_breaks_found'] == 0:
+            print(f"\n⚠️  ATENÇÃO: A IA não usou quebras de linha na resposta")
+            return True
+        else:
+            print(f"\n❌ ERRO: Nem todas as quebras de linha foram convertidas")
+            return False
+            
+    except Exception as e:
+        logger.error(f"❌ Erro no teste: {e}")
+        return False
+
+if __name__ == "__main__":
+    # Executar teste
+    success = asyncio.run(test_formatting())
+    
+    if success:
+        print(f"\n🎉 Teste concluído com sucesso!")
+        sys.exit(0)
+    else:
+        print(f"\n💥 Teste falhou!")
+        sys.exit(1)

@@ -84,8 +84,6 @@ class GeminiAnalyzer:
         
         # Prompt estratégico direto
         main_prompt = """
-ATENÇÃO: NUNCA use quebras de linha normais (\n). Sempre substitua por <br> em toda sua resposta.
-
 Analise o SQL ou csv que você enviou (estrutura das tabelas, inserts, dados) e traga um resumo em linguagem de negócios.
 Você é um consultor estratégico sênior de uma das Big 4 (McKinsey, BCG, Bain, Deloitte) analisando dados empresariais para o C-Level de uma organização.
 OBJETIVO: Analise os dados fornecidos e gere insights estratégicos como um partner experiente de consultoria de negócios.
@@ -110,15 +108,12 @@ Foco em value creation e competitive advantage
 Referências a frameworks estratégicos (Porter, Ansoff, Blue Ocean)
 Benchmarking setorial e best practices
 
-FORMATAÇÃO OBRIGATÓRIA:
+FORMATAÇÃO:
 - Use formatação Markdown para estruturar a resposta (títulos com #, ##, ###)
-- NUNCA use \n para quebras de linha - SEMPRE use <br> no lugar
-- Quando quiser pular uma linha, use <br> ao invés de quebra de linha normal
-- Para separar seções, use <br><br> ao invés de linhas vazias
 - Use listas com - ou * quando apropriado
 - Use **negrito** para destacar pontos importantes
 - Use *itálico* para ênfase
-- No final da análise, assine com: "<br><br>Análise feita por SmartBI"
+- No final da análise, assine com: "Análise feita por SmartBI"
 
 IMPORTANTE:
 NÃO mencione aspectos técnicos de TI, programação ou detalhes de implementação
@@ -168,10 +163,6 @@ DADOS PARA ANÁLISE:
             
             response_text = response.text.strip()
             logger.info(f"✅ Resposta recebida do Gemini ({len(response_text)} chars)")
-            
-            # Substituir todas as quebras de linha por <br>
-            response_text = response_text.replace('\n', '<br>')
-            logger.info(f"🔄 Quebras de linha convertidas para <br>")
             
             # 3. Preparar resultado final (apenas a resposta do Gemini)
             processing_time = time.time() - start_time
@@ -224,10 +215,6 @@ DADOS PARA ANÁLISE:
             
             response_text = response.text.strip()
             logger.info(f"✅ Insights específicos gerados ({len(response_text)} chars)")
-            
-            # Substituir todas as quebras de linha por <br>
-            response_text = response_text.replace('\n', '<br>')
-            logger.info(f"🔄 Quebras de linha convertidas para <br>")
             
             # 4. Preparar resultado final
             processing_time = time.time() - start_time
@@ -308,8 +295,6 @@ DADOS PARA ANÁLISE:
             Prompt formatado para Gemini
         """
         return f"""
-ATENÇÃO: NUNCA use quebras de linha normais (\n). Sempre substitua por <br> em toda sua resposta.
-
 Você é um consultor estratégico sênior de uma das Big 4 (McKinsey, BCG, Bain, Deloitte) especializado em análise de dados e business intelligence.
 
 Sua missão é analisar os dados da base de dados fornecida e gerar insights estratégicos específicos baseados na solicitação do cliente C-Level.
@@ -345,94 +330,17 @@ INSTRUÇÕES PARA ANÁLISE ESTRATÉGICA:
    - Use métricas e dados concretos sempre que possível
    - Apresente conclusões acionáveis para tomada de decisão
 
-5. **FORMATAÇÃO OBRIGATÓRIA**:
+5. **FORMATAÇÃO**:
    - Use formatação Markdown para estruturar a resposta (títulos com #, ##, ###)
-   - NUNCA use \n para quebras de linha - SEMPRE use <br> no lugar
-   - Quando quiser pular uma linha, use <br> ao invés de quebra de linha normal
-   - Para separar seções, use <br><br> ao invés de linhas vazias
    - Use listas com - ou * quando apropriado
    - Use **negrito** para destacar pontos importantes
    - Use *itálico* para ênfase
-   - No final da análise, assine com: "<br><br>Análise feita por SmartBI"
+   - No final da análise, assine com: "Análise feita por SmartBI"
 
 IMPORTANTE: Sua resposta deve ser específica à solicitação feita e baseada nos dados reais da base de dados. Evite generalizações e foque em insights práticos e estratégicos.
 
 Gere sua análise estratégica em português brasileiro:
 """
-
-    async def test_formatting(self) -> Dict[str, Any]:
-        """
-        Testa a formatação da resposta para verificar se as quebras de linha são convertidas para <br>
-        
-        Returns:
-            Dict: Resultado do teste de formatação
-        """
-        if not self.model:
-            raise Exception("Gemini API não configurada. Verifique a GEMINI_API_KEY")
-        
-        start_time = time.time()
-        
-        try:
-            # Prompt de teste simples
-            test_prompt = """
-ATENÇÃO: NUNCA use quebras de linha normais (\n). Sempre substitua por <br> em toda sua resposta.
-
-Você é um consultor estratégico. Faça uma análise breve de teste com as seguintes seções:
-
-# Título Principal
-
-## Seção 1
-Primeiro parágrafo de teste.
-
-Segundo parágrafo de teste.
-
-## Seção 2
-- Item 1
-- Item 2
-- Item 3
-
-**Texto em negrito** e *texto em itálico*.
-
-Análise feita por SmartBI
-"""
-            
-            logger.info("🧪 Executando teste de formatação...")
-            
-            # Enviar para Gemini
-            response = self.model.generate_content(test_prompt)
-            
-            if not response or not response.text:
-                raise Exception("Resposta vazia do Gemini no teste")
-            
-            original_text = response.text.strip()
-            logger.info(f"📝 Resposta original recebida ({len(original_text)} chars)")
-            
-            # Substituir todas as quebras de linha por <br>
-            formatted_text = original_text.replace('\n', '<br>')
-            logger.info(f"🔄 Quebras de linha convertidas para <br>")
-            
-            processing_time = time.time() - start_time
-            
-            result = {
-                "test_success": True,
-                "original_response": original_text,
-                "formatted_response": formatted_text,
-                "line_breaks_found": original_text.count('\n'),
-                "br_tags_added": formatted_text.count('<br>'),
-                "processing_time": round(processing_time, 2),
-                "model_used": self.model_name,
-                "tested_at": datetime.now().isoformat()
-            }
-            
-            logger.info(f"✅ Teste de formatação concluído em {processing_time:.2f}s")
-            logger.info(f"📊 Quebras de linha encontradas: {result['line_breaks_found']}")
-            logger.info(f"📊 Tags <br> adicionadas: {result['br_tags_added']}")
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Erro no teste de formatação: {e}")
-            raise Exception(f"Erro ao executar teste: {str(e)}")
 
     def get_model_info(self) -> Dict[str, Any]:
         """

@@ -9,3 +9,5 @@ pydantic
 sqlalchemy
 pymysql
 psycopg2-binary
+reportlab
+markdown

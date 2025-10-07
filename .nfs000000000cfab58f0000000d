@@ -1,0 +1,136 @@
+"""
+Teste das rotas da API com URLs de PDF
+====================================
+
+Script para testar se as rotas estão retornando URLs públicas para os PDFs
+"""
+
+import requests
+import json
+import time
+
+def test_analyze_database_with_pdf():
+    """
+    Testa a rota /analyze-database com verificação das URLs de PDF
+    """
+    print("🧪 Testando rota /analyze-database com URLs de PDF...")
+    
+    url = "http://localhost:8000/analyze-database"
+    payload = {
+        "database_url": "postgresql://neondb_owner:iVdC1OxbWP99@ep-morning-hill-a5h6lsjm-pooler.us-east-2.aws.neon.tech/mapazzz?sslmode=require"
+    }
+    
+    try:
+        print("📡 Enviando requisição...")
+        response = requests.post(url, json=payload, timeout=120)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ Resposta recebida (Status: {response.status_code})")
+            
+            # Verificar informações de PDF
+            pdf_info = {
+                "pdf_generated": data.get("pdf_generated"),
+                "pdf_filename": data.get("pdf_filename"),
+                "pdf_download_url": data.get("pdf_download_url"),
+                "pdf_static_url": data.get("pdf_static_url"),
+                "pdf_error": data.get("pdf_error")
+            }
+            
+            print(f"📄 PDF Info:")
+            print(json.dumps(pdf_info, indent=2))
+            
+            if pdf_info["pdf_generated"]:
+                print(f"🎉 PDF gerado com sucesso!")
+                print(f"📥 Download URL: {pdf_info['pdf_download_url']}")
+                print(f"🔗 Static URL: {pdf_info['pdf_static_url']}")
+                
+                # Testar se as URLs estão acessíveis
+                if pdf_info["pdf_download_url"]:
+                    test_url_response = requests.head(pdf_info["pdf_download_url"], timeout=10)
+                    print(f"🌐 URL Download acessível: {'✅' if test_url_response.status_code == 200 else '❌'}")
+                
+                if pdf_info["pdf_static_url"]:
+                    test_url_response = requests.head(pdf_info["pdf_static_url"], timeout=10)
+                    print(f"🌐 URL Static acessível: {'✅' if test_url_response.status_code == 200 else '❌'}")
+                
+                return True
+            else:
+                print(f"❌ PDF não foi gerado. Erro: {pdf_info.get('pdf_error', 'Desconhecido')}")
+                return False
+                
+        else:
+            print(f"❌ Erro na requisição: {response.status_code}")
+            print(f"Resposta: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro no teste: {e}")
+        return False
+
+def test_static_files():
+    """
+    Testa se os arquivos estáticos estão sendo servidos corretamente
+    """
+    print("\n🧪 Testando arquivos estáticos...")
+    
+    try:
+        # Testar se o diretório reports está acessível
+        response = requests.get("http://localhost:8000/reports/", timeout=10)
+        print(f"📁 Acesso ao diretório reports: {'✅' if response.status_code in [200, 403] else '❌'}")
+        
+        return response.status_code in [200, 403]  # 403 é normal para listagem de diretório
+        
+    except Exception as e:
+        print(f"❌ Erro ao testar arquivos estáticos: {e}")
+        return False
+
+def test_health_endpoint():
+    """
+    Testa se o servidor está funcionando
+    """
+    try:
+        response = requests.get("http://localhost:8000/health", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ Servidor funcionando - Status: {data.get('status')}")
+            return True
+        else:
+            print("❌ Servidor não está respondendo adequadamente")
+            return False
+    except Exception as e:
+        print(f"❌ Não foi possível conectar ao servidor: {e}")
+        return False
+
+def main():
+    """
+    Executa todos os testes
+    """
+    print("🚀 Iniciando testes das URLs de PDF da API SmartBI\n")
+    
+    # Aguardar o servidor inicializar
+    print("⏳ Aguardando servidor inicializar...")
+    time.sleep(3)
+    
+    # Testar se o servidor está funcionando
+    if not test_health_endpoint():
+        return
+    
+    # Testar arquivos estáticos
+    static_test = test_static_files()
+    
+    # Executar teste principal
+    test_success = test_analyze_database_with_pdf()
+    
+    print(f"\n📊 Resumo dos testes:")
+    print(f"   Servidor funcionando: ✅")
+    print(f"   Arquivos estáticos: {'✅ Sucesso' if static_test else '❌ Falhou'}")
+    print(f"   PDF URLs geradas: {'✅ Sucesso' if test_success else '❌ Falhou'}")
+    
+    if static_test and test_success:
+        print("\n🎉 Todos os testes passaram! As URLs de PDF estão funcionando.")
+    else:
+        print("\n⚠️ Alguns testes falharam. Verifique os logs acima.")
+
+if __name__ == "__main__":
+    main()

@@ -18,6 +18,9 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Importar o gerador de PDF
+from pdf_generator import PDFGenerator
+
 # Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
 
@@ -36,6 +39,14 @@ class GeminiAnalyzer:
         self.api_key = os.getenv("GEMINI_API_KEY")
         self.model_name = "gemini-2.5-flash-lite"  # Modelo mais recente e eficiente
         self.model = None
+        
+        # Inicializar gerador de PDF
+        try:
+            self.pdf_generator = PDFGenerator()
+            logger.info("✅ PDFGenerator inicializado com sucesso")
+        except Exception as e:
+            logger.error(f"❌ Erro ao inicializar PDFGenerator: {e}")
+            self.pdf_generator = None
         
         if self.api_key:
             try:
@@ -174,6 +185,28 @@ DADOS PARA ANÁLISE:
                 "analyzed_at": datetime.now().isoformat()
             }
             
+            # 4. Gerar PDF automaticamente
+            pdf_path = None
+            if self.pdf_generator:
+                try:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"analysis_{file_type}_{timestamp}"
+                    pdf_path = self.pdf_generator.generate_pdf_from_analysis(result, filename)
+                    logger.info(f"📄 PDF gerado: {pdf_path}")
+                    
+                    # Adicionar informações do PDF ao resultado
+                    result["pdf_generated"] = True
+                    result["pdf_path"] = pdf_path
+                    result["pdf_filename"] = os.path.basename(pdf_path)
+                    
+                except Exception as pdf_error:
+                    logger.warning(f"⚠️ Erro ao gerar PDF: {pdf_error}")
+                    result["pdf_generated"] = False
+                    result["pdf_error"] = str(pdf_error)
+            else:
+                result["pdf_generated"] = False
+                result["pdf_error"] = "PDFGenerator não inicializado"
+            
             logger.info(f"🎯 Análise concluída em {processing_time:.2f}s")
             return result
             
@@ -228,6 +261,31 @@ DADOS PARA ANÁLISE:
                 "database_context_size": len(database_context),
                 "tables_analyzed": len(database_schema.get('tables', {}))
             }
+            
+            # 5. Gerar PDF automaticamente
+            pdf_path = None
+            if self.pdf_generator:
+                try:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    # Sanitizar o insight_request para usar como parte do nome do arquivo
+                    safe_request = "".join(c for c in insight_request[:30] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                    safe_request = safe_request.replace(' ', '_')
+                    filename = f"specific_insights_{safe_request}_{timestamp}"
+                    pdf_path = self.pdf_generator.generate_pdf_from_analysis(result, filename)
+                    logger.info(f"📄 PDF de insights específicos gerado: {pdf_path}")
+                    
+                    # Adicionar informações do PDF ao resultado
+                    result["pdf_generated"] = True
+                    result["pdf_path"] = pdf_path
+                    result["pdf_filename"] = os.path.basename(pdf_path)
+                    
+                except Exception as pdf_error:
+                    logger.warning(f"⚠️ Erro ao gerar PDF: {pdf_error}")
+                    result["pdf_generated"] = False
+                    result["pdf_error"] = str(pdf_error)
+            else:
+                result["pdf_generated"] = False
+                result["pdf_error"] = "PDFGenerator não inicializado"
             
             logger.info(f"🎯 Análise de insights específicos concluída em {processing_time:.2f}s")
             return result

@@ -10,8 +10,9 @@ Versão: 2.0.0
 Data: 2025
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Body
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, File, UploadFile, HTTPException, Body, Request
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
@@ -57,6 +58,13 @@ app.add_middleware(
 TEMP_DIR = Path("temp")
 TEMP_DIR.mkdir(exist_ok=True)
 
+# Diretório para arquivos estáticos (PDFs)
+REPORTS_DIR = Path("reports")
+REPORTS_DIR.mkdir(exist_ok=True)
+
+# Configurar arquivos estáticos para servir PDFs
+app.mount("/reports", StaticFiles(directory="reports"), name="reports")
+
 # Inicializar serviços
 try:
     gemini_analyzer = GeminiAnalyzer()
@@ -66,6 +74,51 @@ try:
 except Exception as e:
     logger.error(f"❌ Erro ao inicializar serviços: {e}")
     raise
+
+
+def create_pdf_urls(pdf_path: str, request: Request = None) -> dict:
+    """
+    Cria URLs públicas para acesso ao PDF baseadas na requisição atual
+    
+    Args:
+        pdf_path: Caminho local do PDF
+        request: Objeto de requisição FastAPI (opcional)
+    
+    Returns:
+        Dict com URLs de acesso ao PDF
+    """
+    if not pdf_path:
+        return {}
+    
+    filename = os.path.basename(pdf_path)
+    
+    # Detectar automaticamente o esquema e host
+    if request:
+        # Prioridade: header x-forwarded-proto (para proxies/load balancers)
+        scheme = "https" if request.headers.get("x-forwarded-proto") == "https" else request.url.scheme
+        
+        # Detectar host: header host tem prioridade (para proxies)
+        host = request.headers.get("host")
+        
+        # Fallbacks para host
+        if not host and hasattr(request, 'client') and request.client:
+            host = f"{request.client.host}:8000"
+        
+        # Última opção: usar variáveis de ambiente ou localhost
+        if not host:
+            host = os.getenv("HOST", "localhost:8000")
+    else:
+        # Sem objeto request, usar variáveis de ambiente
+        scheme = "https" if os.getenv("HTTPS", "").lower() in ["true", "1"] else "http"
+        host = os.getenv("HOST") or os.getenv("DOMAIN") or "localhost:8000"
+    
+    base_url = f"{scheme}://{host}"
+    
+    return {
+        "pdf_download_url": f"{base_url}/download-pdf/{filename}",
+        "pdf_static_url": f"{base_url}/reports/{filename}",
+        "pdf_filename": filename
+    }
 
 
 @app.get("/")
@@ -83,6 +136,8 @@ async def root():
             "/upload": "POST - Upload de arquivo para análise",
             "/analyze-database": "POST - Análise via conexão com base de dados",
             "/specific-insights": "POST - Insights estratégicos específicos baseados em solicitação",
+            "/download-pdf/{filename}": "GET - Download de PDF específico",
+            "/reports": "GET - Acesso aos arquivos PDF (estáticos)",
             "/health": "GET - Status de saúde da aplicação",
             "/docs": "GET - Documentação interativa (Swagger)",
             "/redoc": "GET - Documentação alternativa (ReDoc)"
@@ -93,6 +148,42 @@ async def root():
         "ai_provider": "Google Gemini",
         "documentation": "/docs"
     }
+
+
+@app.get("/download-pdf/{filename}")
+async def download_pdf(filename: str):
+    """
+    Endpoint para download direto de PDFs
+    
+    Args:
+        filename: Nome do arquivo PDF (sem o caminho)
+    
+    Returns:
+        Arquivo PDF para download
+    """
+    try:
+        # Verificar se o arquivo existe
+        file_path = REPORTS_DIR / filename
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"PDF não encontrado: {filename}")
+        
+        if not filename.endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="Apenas arquivos PDF são permitidos")
+        
+        # Retornar o arquivo para download
+        return FileResponse(
+            path=file_path,
+            media_type='application/pdf',
+            filename=filename,
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao servir PDF {filename}: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @app.get("/health")
@@ -127,7 +218,7 @@ async def health_check():
 
 
 @app.post("/upload")
-async def upload_and_analyze(file: UploadFile = File(...)):
+async def upload_and_analyze(file: UploadFile = File(...), request: Request = None):
     """
     Endpoint para upload de arquivo e análise com Gemini
     
@@ -192,7 +283,9 @@ async def upload_and_analyze(file: UploadFile = File(...)):
             logger.error(f"Erro na análise Gemini: {e}")
             raise HTTPException(status_code=500, detail=f"Erro na análise com IA: {str(e)}")
         
-        # 5. Preparar resposta
+        # 5. Preparar resposta com URLs do PDF
+        pdf_urls = create_pdf_urls(gemini_analysis.get('pdf_path'), request)
+        
         response = {
             "success": True,
             "message": "Análise concluída com sucesso",
@@ -206,7 +299,14 @@ async def upload_and_analyze(file: UploadFile = File(...)):
             "gemini_response": gemini_analysis['gemini_response'],
             "processing_time": gemini_analysis.get('processing_time', 0),
             "model_used": gemini_analysis.get('model_used', 'gemini-2.5-flash-lite'),
-            "analyzed_at": gemini_analysis.get('analyzed_at')
+            "analyzed_at": gemini_analysis.get('analyzed_at'),
+            # Informações do PDF
+            "pdf_generated": gemini_analysis.get('pdf_generated', False),
+            "pdf_path": gemini_analysis.get('pdf_path'),
+            "pdf_filename": gemini_analysis.get('pdf_filename'),
+            "pdf_error": gemini_analysis.get('pdf_error'),
+            # URLs públicas do PDF
+            **pdf_urls
         }
         
         logger.info(f"✅ Análise concluída para: {file.filename}")
@@ -231,7 +331,7 @@ async def upload_and_analyze(file: UploadFile = File(...)):
 
 
 @app.post("/analyze-database")
-async def analyze_database(request: DatabaseConnectionRequest = Body(...)):
+async def analyze_database(request_data: DatabaseConnectionRequest = Body(...), request: Request = None):
     """
     Endpoint para análise de dados via conexão direta com base de dados
     
@@ -249,14 +349,14 @@ async def analyze_database(request: DatabaseConnectionRequest = Body(...)):
     """
     
     # Log do início da requisição
-    logger.info(f"🗄️ Análise de base de dados iniciada: {request.database_url}")
+    logger.info(f"🗄️ Análise de base de dados iniciada: {request_data.database_url}")
     
     try:
         db_connector = DatabaseConnector()
         
         # 1. Conecta à base de dados
         try:
-            connection_info = db_connector.connect_to_database(request.database_url)
+            connection_info = db_connector.connect_to_database(request_data.database_url)
             logger.info(f"🔗 Conectado à {connection_info['database_type']}")
             
         except Exception as e:
@@ -297,7 +397,9 @@ async def analyze_database(request: DatabaseConnectionRequest = Body(...)):
             logger.error(f"Erro na análise Gemini: {e}")
             raise HTTPException(status_code=500, detail=f"Erro na análise com IA: {str(e)}")
         
-        # 5. Preparar resposta
+        # 5. Preparar resposta com URLs do PDF
+        pdf_urls = create_pdf_urls(gemini_analysis.get('pdf_path'), request) if request else {}
+        
         response = {
             "success": True,
             "message": "Análise de base de dados concluída com sucesso",
@@ -318,7 +420,14 @@ async def analyze_database(request: DatabaseConnectionRequest = Body(...)):
             "gemini_response": gemini_analysis['gemini_response'],
             "processing_time": gemini_analysis.get('processing_time', 0),
             "model_used": gemini_analysis.get('model_used', 'gemini-2.5-flash-lite'),
-            "analyzed_at": gemini_analysis.get('analyzed_at')
+            "analyzed_at": gemini_analysis.get('analyzed_at'),
+            # Informações do PDF
+            "pdf_generated": gemini_analysis.get('pdf_generated', False),
+            "pdf_path": gemini_analysis.get('pdf_path'),
+            "pdf_filename": gemini_analysis.get('pdf_filename'),
+            "pdf_error": gemini_analysis.get('pdf_error'),
+            # URLs públicas do PDF
+            **pdf_urls
         }
         
         logger.info(f"✅ Análise de base de dados concluída")
@@ -341,7 +450,7 @@ async def analyze_database(request: DatabaseConnectionRequest = Body(...)):
 
 
 @app.post("/specific-insights")
-async def get_specific_insights(request: SpecificInsightRequest = Body(...)):
+async def get_specific_insights(request_data: SpecificInsightRequest = Body(...), request: Request = None):
     """
     Endpoint para gerar insights estratégicos específicos baseados em solicitação
     
@@ -359,14 +468,14 @@ async def get_specific_insights(request: SpecificInsightRequest = Body(...)):
     
     # Log do início da requisição
     logger.info(f"🎯 Solicitação de insights específicos iniciada")
-    logger.info(f"💭 Solicitação: {request.insight_request[:100]}...")
+    logger.info(f"💭 Solicitação: {request_data.insight_request[:100]}...")
     
     try:
         db_connector = DatabaseConnector()
         
         # 1. Conecta à base de dados
         try:
-            connection_info = db_connector.connect_to_database(request.database_url)
+            connection_info = db_connector.connect_to_database(request_data.database_url)
             logger.info(f"🔗 Conectado à {connection_info['database_type']}")
             
         except Exception as e:
@@ -399,7 +508,7 @@ async def get_specific_insights(request: SpecificInsightRequest = Body(...)):
             insights_analysis = await gemini_analyzer.analyze_specific_insights(
                 database_schema=database_schema,
                 sample_data=sample_data,
-                insight_request=request.insight_request
+                insight_request=request_data.insight_request
             )
             logger.info("✅ Insights estratégicos gerados com sucesso")
             
@@ -407,11 +516,13 @@ async def get_specific_insights(request: SpecificInsightRequest = Body(...)):
             logger.error(f"Erro na análise de insights: {e}")
             raise HTTPException(status_code=500, detail=f"Erro na geração de insights: {str(e)}")
         
-        # 5. Preparar resposta
+        # 5. Preparar resposta com URLs do PDF
+        pdf_urls = create_pdf_urls(insights_analysis.get('pdf_path'), request) if request else {}
+        
         response = {
             "success": True,
             "message": "Insights estratégicos específicos gerados com sucesso",
-            "insight_request": request.insight_request,
+            "insight_request": request_data.insight_request,
             "database_info": {
                 "database_type": connection_info["database_type"],
                 "host": connection_info["host"],
@@ -424,7 +535,14 @@ async def get_specific_insights(request: SpecificInsightRequest = Body(...)):
             "strategic_insights": insights_analysis["strategic_insights"],
             "processing_time": insights_analysis["processing_time"],
             "model_used": insights_analysis["model_used"],
-            "analyzed_at": insights_analysis["analyzed_at"]
+            "analyzed_at": insights_analysis["analyzed_at"],
+            # Informações do PDF
+            "pdf_generated": insights_analysis.get('pdf_generated', False),
+            "pdf_path": insights_analysis.get('pdf_path'),
+            "pdf_filename": insights_analysis.get('pdf_filename'),
+            "pdf_error": insights_analysis.get('pdf_error'),
+            # URLs públicas do PDF
+            **pdf_urls
         }
         
         logger.info(f"🎯 Insights específicos concluídos em {insights_analysis['processing_time']:.2f}s")

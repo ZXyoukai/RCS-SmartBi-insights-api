@@ -1,0 +1,139 @@
+"""
+Teste das rotas da API com verificação de PDF
+==========================================
+
+Script para testar se as rotas estão retornando informações do PDF
+"""
+
+import requests
+import json
+import time
+
+def test_analyze_database():
+    """
+    Testa a rota /analyze-database
+    """
+    print("🧪 Testando rota /analyze-database...")
+    
+    url = "http://localhost:8000/analyze-database"
+    payload = {
+        "database_url": "postgresql://neondb_owner:iVdC1OxbWP99@ep-morning-hill-a5h6lsjm-pooler.us-east-2.aws.neon.tech/mapazzz?sslmode=require"
+    }
+    
+    try:
+        print("📡 Enviando requisição...")
+        response = requests.post(url, json=payload, timeout=60)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ Resposta recebida (Status: {response.status_code})")
+            
+            # Verificar se contém informações de PDF
+            pdf_info = {
+                "pdf_generated": data.get("pdf_generated"),
+                "pdf_path": data.get("pdf_path"),
+                "pdf_filename": data.get("pdf_filename"),
+                "pdf_error": data.get("pdf_error")
+            }
+            
+            print(f"📄 PDF Info: {json.dumps(pdf_info, indent=2)}")
+            
+            if pdf_info["pdf_generated"]:
+                print(f"🎉 PDF gerado com sucesso: {pdf_info['pdf_filename']}")
+                return True
+            else:
+                print(f"❌ PDF não foi gerado. Erro: {pdf_info.get('pdf_error', 'Desconhecido')}")
+                return False
+                
+        else:
+            print(f"❌ Erro na requisição: {response.status_code}")
+            print(f"Resposta: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro no teste: {e}")
+        return False
+
+def test_specific_insights():
+    """
+    Testa a rota /specific-insights
+    """
+    print("\n🧪 Testando rota /specific-insights...")
+    
+    url = "http://localhost:8000/specific-insights"
+    payload = {
+        "database_url": "postgresql://neondb_owner:iVdC1OxbWP99@ep-morning-hill-a5h6lsjm-pooler.us-east-2.aws.neon.tech/mapazzz?sslmode=require",
+        "insight_request": "Analise os dados de usuários e relatórios para identificar padrões de engajamento"
+    }
+    
+    try:
+        print("📡 Enviando requisição...")
+        response = requests.post(url, json=payload, timeout=60)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ Resposta recebida (Status: {response.status_code})")
+            
+            # Verificar se contém informações de PDF
+            pdf_info = {
+                "pdf_generated": data.get("pdf_generated"),
+                "pdf_path": data.get("pdf_path"),
+                "pdf_filename": data.get("pdf_filename"),
+                "pdf_error": data.get("pdf_error")
+            }
+            
+            print(f"📄 PDF Info: {json.dumps(pdf_info, indent=2)}")
+            
+            if pdf_info["pdf_generated"]:
+                print(f"🎉 PDF gerado com sucesso: {pdf_info['pdf_filename']}")
+                return True
+            else:
+                print(f"❌ PDF não foi gerado. Erro: {pdf_info.get('pdf_error', 'Desconhecido')}")
+                return False
+                
+        else:
+            print(f"❌ Erro na requisição: {response.status_code}")
+            print(f"Resposta: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro no teste: {e}")
+        return False
+
+def main():
+    """
+    Executa todos os testes
+    """
+    print("🚀 Iniciando testes das rotas da API SmartBI\n")
+    
+    # Aguardar o servidor inicializar
+    print("⏳ Aguardando servidor inicializar...")
+    time.sleep(3)
+    
+    # Testar se o servidor está respondendo
+    try:
+        response = requests.get("http://localhost:8000/health", timeout=10)
+        if response.status_code == 200:
+            print("✅ Servidor está rodando\n")
+        else:
+            print("❌ Servidor não está respondendo adequadamente")
+            return
+    except Exception as e:
+        print(f"❌ Não foi possível conectar ao servidor: {e}")
+        return
+    
+    # Executar testes
+    test1_success = test_analyze_database()
+    test2_success = test_specific_insights()
+    
+    print(f"\n📊 Resumo dos testes:")
+    print(f"   /analyze-database: {'✅ Sucesso' if test1_success else '❌ Falhou'}")
+    print(f"   /specific-insights: {'✅ Sucesso' if test2_success else '❌ Falhou'}")
+    
+    if test1_success and test2_success:
+        print("\n🎉 Todos os testes passaram! As rotas estão retornando informações do PDF.")
+    else:
+        print("\n⚠️ Alguns testes falharam. Verifique os logs acima.")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,125 @@
+"""
+Teste de detecção automática de domínio
+======================================
+
+Script para verificar se o sistema detecta automaticamente o domínio da requisição
+"""
+
+import asyncio
+import sys
+import os
+
+# Simular objeto de requisição FastAPI
+class MockRequest:
+    def __init__(self, scheme="http", host="localhost:8000", headers=None):
+        self.url = MockURL(scheme)
+        self.headers = headers or {"host": host}
+        self.client = MockClient()
+
+class MockURL:
+    def __init__(self, scheme="http"):
+        self.scheme = scheme
+
+class MockClient:
+    def __init__(self):
+        self.host = "localhost"
+
+def test_create_pdf_urls():
+    """
+    Testa a função create_pdf_urls com diferentes configurações de domínio
+    """
+    # Importar a função do main
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from main import create_pdf_urls
+    
+    print("🧪 Testando detecção automática de domínio...")
+    
+    # Teste 1: Localhost padrão
+    print("\n📌 Teste 1: Localhost padrão")
+    request1 = MockRequest()
+    urls1 = create_pdf_urls("reports/teste.pdf", request1)
+    print(f"   Download URL: {urls1.get('pdf_download_url')}")
+    print(f"   Static URL: {urls1.get('pdf_static_url')}")
+    
+    # Teste 2: Domínio customizado
+    print("\n📌 Teste 2: Domínio customizado")
+    request2 = MockRequest(host="api.smartbi.com")
+    urls2 = create_pdf_urls("reports/teste.pdf", request2)
+    print(f"   Download URL: {urls2.get('pdf_download_url')}")
+    print(f"   Static URL: {urls2.get('pdf_static_url')}")
+    
+    # Teste 3: HTTPS com proxy (x-forwarded-proto)
+    print("\n📌 Teste 3: HTTPS com proxy")
+    headers3 = {"host": "api.smartbi.com", "x-forwarded-proto": "https"}
+    request3 = MockRequest(headers=headers3)
+    urls3 = create_pdf_urls("reports/teste.pdf", request3)
+    print(f"   Download URL: {urls3.get('pdf_download_url')}")
+    print(f"   Static URL: {urls3.get('pdf_static_url')}")
+    
+    # Teste 4: Heroku/Railway/Render (porta implícita)
+    print("\n📌 Teste 4: Deploy em produção")
+    headers4 = {"host": "smartbi-api.herokuapp.com", "x-forwarded-proto": "https"}
+    request4 = MockRequest(headers=headers4)
+    urls4 = create_pdf_urls("reports/teste.pdf", request4)
+    print(f"   Download URL: {urls4.get('pdf_download_url')}")
+    print(f"   Static URL: {urls4.get('pdf_static_url')}")
+    
+    # Teste 5: Sem PDF (deve retornar dict vazio)
+    print("\n📌 Teste 5: Sem PDF")
+    urls5 = create_pdf_urls(None, request1)
+    print(f"   URLs vazias: {urls5}")
+    
+    print("\n✅ Todos os testes de detecção de domínio concluídos!")
+    
+    # Verificar se as URLs estão corretas
+    assert "http://localhost:8000" in urls1["pdf_download_url"]
+    assert "http://api.smartbi.com" in urls2["pdf_download_url"]  
+    assert "https://api.smartbi.com" in urls3["pdf_download_url"]
+    assert "https://smartbi-api.herokuapp.com" in urls4["pdf_download_url"]
+    assert len(urls5) == 0
+    
+    print("🎉 Validação das URLs bem-sucedida!")
+
+def test_url_patterns():
+    """
+    Testa diferentes padrões de URL que podem ocorrer em produção
+    """
+    from main import create_pdf_urls
+    
+    print("\n🧪 Testando padrões de URL em produção...")
+    
+    production_scenarios = [
+        {
+            "name": "Vercel",
+            "headers": {"host": "smartbi-api.vercel.app", "x-forwarded-proto": "https"}
+        },
+        {
+            "name": "Netlify",
+            "headers": {"host": "smartbi-api.netlify.app", "x-forwarded-proto": "https"}
+        },
+        {
+            "name": "Railway",
+            "headers": {"host": "smartbi-api.up.railway.app", "x-forwarded-proto": "https"}
+        },
+        {
+            "name": "Render",
+            "headers": {"host": "smartbi-api.onrender.com", "x-forwarded-proto": "https"}
+        },
+        {
+            "name": "Docker local",
+            "headers": {"host": "192.168.1.100:8000"}
+        }
+    ]
+    
+    for scenario in production_scenarios:
+        print(f"\n📍 {scenario['name']}:")
+        request = MockRequest(headers=scenario["headers"])
+        urls = create_pdf_urls("reports/analysis_20241007.pdf", request)
+        print(f"   Download: {urls.get('pdf_download_url')}")
+        print(f"   Static: {urls.get('pdf_static_url')}")
+    
+    print("\n✅ Testes de padrões de produção concluídos!")
+
+if __name__ == "__main__":
+    test_create_pdf_urls()
+    test_url_patterns()

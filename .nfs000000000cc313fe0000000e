@@ -1,0 +1,168 @@
+"""
+Teste da funcionalidade de geração de PDF
+==========================================
+
+Script para testar a geração de PDF com análises SmartBI
+"""
+
+import asyncio
+import os
+import sys
+from gemini_analyzer import GeminiAnalyzer
+
+async def test_pdf_generation():
+    """
+    Testa a geração de PDF com dados simulados
+    """
+    print("🧪 Iniciando teste de geração de PDF...")
+    
+    try:
+        # Inicializar o analisador
+        analyzer = GeminiAnalyzer()
+        
+        # Dados de teste simulados
+        test_data_content = """
+        CREATE TABLE usuarios (
+            id INT PRIMARY KEY,
+            nome VARCHAR(100),
+            email VARCHAR(100),
+            data_criacao DATETIME
+        );
+        
+        INSERT INTO usuarios VALUES 
+        (1, 'João Silva', 'joao@email.com', '2024-01-01'),
+        (2, 'Maria Santos', 'maria@email.com', '2024-01-02');
+        """
+        
+        test_data_info = {
+            "tables": 1,
+            "records": 2,
+            "source": "test"
+        }
+        
+        print("📊 Executando análise de teste...")
+        
+        # Executar análise
+        result = await analyzer.analyze_data(
+            data_content=test_data_content,
+            data_info=test_data_info,
+            file_type="sql"
+        )
+        
+        # Verificar resultados
+        print(f"✅ Análise concluída em {result['processing_time']} segundos")
+        print(f"📝 Resposta recebida: {len(result['gemini_response'])} caracteres")
+        
+        # Verificar PDF
+        if result.get('pdf_generated'):
+            pdf_path = result.get('pdf_path')
+            print(f"📄 PDF gerado com sucesso: {pdf_path}")
+            
+            # Verificar se o arquivo existe
+            if os.path.exists(pdf_path):
+                file_size = os.path.getsize(pdf_path) / 1024  # KB
+                print(f"📏 Tamanho do PDF: {file_size:.1f} KB")
+                
+                # Mostrar diretório de saída
+                output_dir = analyzer.pdf_generator.get_output_directory()
+                print(f"📁 PDFs salvos em: {output_dir}")
+                
+                # Listar todos os PDFs no diretório
+                pdf_files = [f for f in os.listdir(output_dir) if f.endswith('.pdf')]
+                print(f"📋 Total de PDFs no diretório: {len(pdf_files)}")
+                
+                return True
+            else:
+                print(f"❌ Arquivo PDF não encontrado: {pdf_path}")
+                return False
+        else:
+            print(f"❌ PDF não foi gerado. Erro: {result.get('pdf_error', 'Desconhecido')}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro no teste: {e}")
+        return False
+
+async def test_specific_insights_pdf():
+    """
+    Testa a geração de PDF para insights específicos
+    """
+    print("\n🧪 Testando geração de PDF para insights específicos...")
+    
+    try:
+        analyzer = GeminiAnalyzer()
+        
+        # Dados simulados de schema e amostra
+        database_schema = {
+            "total_tables": 2,
+            "tables": {
+                "vendas": {
+                    "row_count": 100,
+                    "column_count": 5,
+                    "columns": [
+                        {"name": "id", "type": "INT", "primary_key": True},
+                        {"name": "produto", "type": "VARCHAR(100)"},
+                        {"name": "valor", "type": "DECIMAL(10,2)"},
+                        {"name": "data_venda", "type": "DATE"}
+                    ]
+                }
+            }
+        }
+        
+        sample_data = {
+            "total_records": 100,
+            "data": {
+                "vendas": [
+                    {"id": 1, "produto": "Produto A", "valor": 150.00, "data_venda": "2024-01-01"},
+                    {"id": 2, "produto": "Produto B", "valor": 200.00, "data_venda": "2024-01-02"}
+                ]
+            }
+        }
+        
+        insight_request = "Análise de vendas por produto"
+        
+        print("📊 Executando análise de insights específicos...")
+        
+        result = await analyzer.analyze_specific_insights(
+            database_schema=database_schema,
+            sample_data=sample_data,
+            insight_request=insight_request
+        )
+        
+        print(f"✅ Análise de insights concluída em {result['processing_time']} segundos")
+        
+        if result.get('pdf_generated'):
+            pdf_path = result.get('pdf_path')
+            print(f"📄 PDF de insights específicos gerado: {pdf_path}")
+            return True
+        else:
+            print(f"❌ PDF de insights não foi gerado. Erro: {result.get('pdf_error', 'Desconhecido')}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro no teste de insights específicos: {e}")
+        return False
+
+async def main():
+    """
+    Executa todos os testes
+    """
+    print("🚀 Iniciando testes de geração de PDF SmartBI\n")
+    
+    # Teste 1: Análise geral
+    test1_success = await test_pdf_generation()
+    
+    # Teste 2: Insights específicos
+    test2_success = await test_specific_insights_pdf()
+    
+    print(f"\n📊 Resumo dos testes:")
+    print(f"   Análise geral: {'✅ Sucesso' if test1_success else '❌ Falhou'}")
+    print(f"   Insights específicos: {'✅ Sucesso' if test2_success else '❌ Falhou'}")
+    
+    if test1_success and test2_success:
+        print("\n🎉 Todos os testes passaram! Funcionalidade de PDF funcionando corretamente.")
+    else:
+        print("\n⚠️ Alguns testes falharam. Verifique os logs acima.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
